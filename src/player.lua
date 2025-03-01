@@ -5,11 +5,21 @@ Player.__index = Player
 
 function Player:new()
     local self = setmetatable({}, Player)
-    self.x = DEFAULT_MAP_SIZE / 2
-    self.y = DEFAULT_MAP_SIZE / 2
     self.speed = 1
     self.velocity = { x = 0, y = 0 }
     return self
+end
+
+function Player:pos()
+    return {
+        x = self.x,
+        y = self.y,
+    }
+end
+
+function Player:draw()
+    love.graphics.setColor(1, 0, 0, .8)
+    love.graphics.rectangle("fill", self.x * world.tileSize, self.y * world.tileSize, world.tileSize, world.tileSize)
 end
 
 function Player:update(dt)
