@@ -1,13 +1,17 @@
+local Noise = require('src.noise')
+local noise = Noise:new()
+
 local seed = require('src.seed')
 
 local World = {}
 World.__index = World
 
 function World:new()
-    love.math.setRandomSeed(seed.seed)
     local self = setmetatable({}, World)
-    self.tileSize = 16
-    self.chunkSize = 16
+    self.worldSeed = seed.seed
+    self.tileSize = DEFAULT_TILE_SIZE
+    self.chunkSize = DEFAULT_CHUNK_SIZE
+    self.chunksAroundPlayer = DEFAULT_CHUNKS_NEAR_PLAYER
     self.tiles = {}
     self.chunks = {}
     return self
@@ -43,8 +47,8 @@ end
 
 function World:chunkFromPosition(pos)
     local chunkCoordinates = {
-        x = math.floor(pos.x / self.chunkSize),
-        y = math.floor(pos.y / self.chunkSize),
+        x = math.floor(pos.x / self.tileSize / self.chunkSize),
+        y = math.floor(pos.y / self.tileSize / self.chunkSize),
     }
     return chunkCoordinates
 end
@@ -64,26 +68,32 @@ end
 --    chunk 1, 1
 
 function World:GenerateChunk(pos)
-    if CHUNK_DEBUG then
-        print('load chunk', pos.x, pos.y)
-    end
+    if CHUNK_DEBUG then print('player pos:', pos.x, pos.y) end
     if pos.x == nil or pos.y == nil then return end
-    local chunk = self:chunkFromPosition(pos)
-    local startTile = self:chunkToTileSpace(chunk.x, chunk.y)
+    local playerChunk = self:chunkFromPosition(pos)
+    if CHUNK_DEBUG then print("player in chunk:", playerChunk.x, playerChunk.y) end
     -- we don't worry about cleaning up old chunks right now. optimize later
 
-    -- generate the chunk that the position is in
-    for x = startTile.x, startTile.x + self.chunkSize - 1 do
-        if CHUNK_DEBUG then
-            print('start tile', startTile.x, startTile.y, 'end tile', startTile.x + self.chunkSize - 1,
-                startTile.y + self.chunkSize - 1)
-        end
-        if not self.tiles[x] then
-            self.tiles[x] = {}
-        end
-        for y = startTile.y, startTile.y + self.chunkSize - 1 do
-            if not self.tiles[x][y] then
-                self.tiles[x][y] = { Alive = seed:randomInt(0, 100) < self.chunkSize }
+    -- N chunks surrounding player
+    for cy = playerChunk.y - self.chunksAroundPlayer, playerChunk.y + self.chunksAroundPlayer do
+        for cx = playerChunk.x - self.chunksAroundPlayer, playerChunk.x + self.chunksAroundPlayer do
+            local startTile = self:chunkToTileSpace(cx, cy)
+            if CHUNK_DEBUG then
+                print("load chunk", cx, cy)
+            end
+
+            -- generate the chunk that the position is in
+            love.math.setRandomSeed(seed:generateChunkSeed({ x = cx, y = cy }))
+            for x = startTile.x, startTile.x + self.chunkSize - 1 do
+                if not self.tiles[x] then
+                    self.tiles[x] = {}
+                    if CHUNK_DEBUG and x < 0 then print("ok...") end
+                end
+                for y = startTile.y, startTile.y + self.chunkSize - 1 do
+                    if not self.tiles[x][y] then
+                        self.tiles[x][y] = { type = noise:getTileFromNoise(x, y) }
+                    end
+                end
             end
         end
     end
