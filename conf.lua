@@ -1,8 +1,8 @@
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 
-CHUNK_DEBUG = true
-CAM_DEBUG = true
+CHUNK_DEBUG = false
+CAM_DEBUG = false
 
 function love.conf(t)
     t.title = "GameNameGoesHere"

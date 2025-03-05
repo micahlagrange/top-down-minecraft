@@ -1,3 +1,4 @@
+local Util = require "src.util"
 local Noise = {}
 Noise.__index = Noise
 
@@ -6,28 +7,37 @@ function Noise:new()
     return self
 end
 
-function Noise:getTileFromNoise(x, y)
-    -- supply a tile x-y position, get a 0 or 1 with perlin(ish) noise
-    local n1 = x * (1 / 40)
-    local n2 = y * (1 / 40)
-    local noise = love.math.noise(n1, n2)
-    -- noise: number from 0.0 to 1.0
-    -- 0.0 - 0.2: water
-    -- 0.2 - 0.4: grass
-    -- 0.4 - 0.6: stone
-    -- 0.6 - 0.8: snow
-    if noise > 0 and noise < .09 then
-        return TILE_WATER
-    elseif noise > .09 and noise < .6 then
-        return TILE_GRASS
-    elseif noise > .6 and noise < .99 then
-        return TILE_STONE
-    elseif noise > .99 then
-        return TILE_SNOW
-    else
-        print("wtf",  noise)
-        return { 1, 0, 1 }
+function Noise:getNoiseValue(x, y)
+    local scale = .02
+    local low = 0.0
+    local high = 1.0
+    local octaves = 10
+    local wildness = 1
+    local smoothity = .5
+    return self:cmaherExample(octaves, x, y, wildness, smoothity, scale, low, high)
+end
+
+function Noise:cmaherExample(octaves, x, y, lacunarity, persistence, scale, low, high)
+    local max_amplitude = 0
+    local amplitude = 1
+    local frequency = scale
+    local noise = 0
+
+    for i = 1, octaves do
+        noise = noise + love.math.noise(x * scale, y * scale) * amplitude
+        max_amplitude = max_amplitude + amplitude
+        amplitude = amplitude * persistence
+        frequency = frequency * lacunarity
     end
+
+    -- get average of the iterations
+    noise = noise / max_amplitude
+
+    -- normalize
+    -- https://stats.stackexchange.com/questions/70801/how-to-normalize-data-to-0-1-range
+    Util.normalize(noise, low, high)
+
+    return noise
 end
 
 return Noise

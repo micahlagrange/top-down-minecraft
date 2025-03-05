@@ -1,4 +1,5 @@
 local Noise = require('src.noise')
+local Util  = require('src.util')
 local noise = Noise:new()
 
 local seed = require('src.seed')
@@ -14,10 +15,15 @@ function World:new()
     self.chunksAroundPlayer = DEFAULT_CHUNKS_NEAR_PLAYER
     self.tiles = {}
     self.chunks = {}
+    self.lastGeneratedChunk = { x = 0, y = 0 }
     return self
 end
 
 function World:worldToTileSpace(x, y)
+    if type(x) == "table" then
+        y = x.y
+        x = x.x
+    end
     return {
         x = math.floor(x / self.tileSize),
         y = math.floor(y / self.tileSize),
@@ -51,6 +57,11 @@ function World:chunkFromPosition(pos)
         y = math.floor(pos.y / self.tileSize / self.chunkSize),
     }
     return chunkCoordinates
+end
+
+function World:positionFromChunk(chunk)
+    local tile = self:chunkToTileSpace(chunk.x, chunk.y)
+    return self:tileToWorldSpace(tile.x, tile.y)
 end
 
 -- example chunk graph:
@@ -91,7 +102,8 @@ function World:GenerateChunk(pos)
                 end
                 for y = startTile.y, startTile.y + self.chunkSize - 1 do
                     if not self.tiles[x][y] then
-                        self.tiles[x][y] = { type = noise:getTileFromNoise(x, y) }
+                        self.tiles[x][y] = { altitude = noise:getNoiseValue(x, y)}
+                        self.tiles[x][y] = { type = self:getTileTypeFromNoise(self.tiles[x][y].altitude) }
                     end
                 end
             end
@@ -99,10 +111,30 @@ function World:GenerateChunk(pos)
     end
 end
 
+function World:getTileTypeFromNoise(noise)
+    -- assume 0-1
+    if Util.noiseRange(noise, DEPTH_WATER) then
+        return TILE_WATER
+    elseif Util.noiseRange(noise, DEPTH_GRASS) then
+        return TILE_GRASS
+    elseif Util.noiseRange(noise, DEPTH_STONE) then
+        return TILE_STONE
+    elseif Util.noiseRange(noise, DEPTH_SNOW) then
+        return TILE_SNOW
+    else
+        print("tfw", noise)
+        return { 1, 0, 1 }
+    end
+end
+
 function World:emitPlayerMoved(pos)
     -- generate the chunk that the player is in
     -- (and eventually the N surrounding chunks)
-    self:GenerateChunk(pos)
+    local chunk = self:chunkFromPosition(pos)
+    if self.lastGeneratedChunk.x ~= chunk.x or self.lastGeneratedChunk.y ~= chunk.y then
+        -- only generate the chunk if it's a new chunk the player entered
+        self:GenerateChunk(pos)
+    end
 end
 
 local instance = World:new()

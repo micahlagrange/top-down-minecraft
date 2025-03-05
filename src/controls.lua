@@ -9,8 +9,13 @@ function Controls:new()
     self.move_left = { 'a', 'left' }
     self.move_down = { 's', 'down' }
     self.move_right = { 'd', 'right' }
+    self.sprint_key = { 'lshift' }
 
     return self
+end
+
+function Controls:sprintButtonHeld()
+    return love.keyboard.isDown(self.sprint_key)
 end
 
 function Controls:movementVector()

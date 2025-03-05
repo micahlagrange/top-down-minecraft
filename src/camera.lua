@@ -5,7 +5,7 @@ function Camera:new()
     local self = setmetatable({}, Camera)
     self.x = 0
     self.y = 0
-    self.scale = .1
+    self.scale = 1.5
     return self
 end
 

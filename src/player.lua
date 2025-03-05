@@ -6,7 +6,8 @@ Player.__index = Player
 function Player:new(controller)
     local self = setmetatable({}, Player)
     self.controller = controller
-    self.speed = 500
+    self.speed = 100
+    self.sprintMultiplier = 2
     self.velocity = { x = 0, y = 0 }
     self.width = 16
     self.height = 16
@@ -33,8 +34,12 @@ function Player:update(dt)
 end
 
 function Player:move(vector, dt)
-    self.x = self.x + vector.x * self.speed * dt
-    self.y = self.y + vector.y * self.speed * dt
+    local multi = 1
+    if self.controller:sprintButtonHeld() then
+        multi = multi * self.sprintMultiplier
+    end
+    self.x = self.x + vector.x * self.speed * multi * dt
+    self.y = self.y + vector.y * self.speed * multi * dt
     world:emitPlayerMoved(self:pos())
 end
 
