@@ -251,10 +251,10 @@ function Player:adjacentTilesInXDirection(direction)
         if self:tileInMovementDirection(direction, 0, tile) then
             local wt = world:tileToWorldSpace(tile)
             local tr = { x = wt.x, y = wt.y, width = world.tileSize, height = world.tileSize }
-            table.insert(CollisionDrawRects, tr)
             table.insert(tiles, tile)
         end
     end
+    if COLLISION_DEBUG then CollisionDrawRects = tiles end
     return tiles
 end
 
@@ -264,10 +264,10 @@ function Player:adjacentTilesInYDirection(direction)
         if self:tileInMovementDirection(0, direction, tile) then
             local wt = world:tileToWorldSpace(tile)
             local tr = { x = wt.x, y = wt.y, width = world.tileSize, height = world.tileSize }
-            table.insert(CollisionDrawRects, tr)
             table.insert(tiles, tile)
         end
     end
+    if COLLISION_DEBUG then CollisionDrawRects = tiles end
     return tiles
 end
 

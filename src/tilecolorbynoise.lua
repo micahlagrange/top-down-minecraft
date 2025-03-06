@@ -18,24 +18,19 @@ local function getDimmingByColorAndLayer(color, type, altitude)
     -- normalize the altitude value so the max brightness (the least dimming) is .06 and the lowest
     -- brightness (the most dimming) is 0
     -- and I suppose there should be a minimum color value / a maximum dimming
-    local brightness = 1
-    local minAlti = 0
-    local maxAlti = 1
+    local dimming
     if type == TILE_WATER then
-        minAlti = DEPTH_WATER[1]
-        maxAlti = DEPTH_WATER[2]
+        dimming = (1 - (altitude / DEPTH_WATER[2])) / 5
     elseif type == TILE_GRASS then
-        minAlti = DEPTH_GRASS[1]
-        maxAlti = DEPTH_GRASS[2]
+        dimming = (1 - (altitude / DEPTH_GRASS[2])) / 5
     elseif type == TILE_STONE then
-        minAlti = DEPTH_STONE[1]
-        maxAlti = DEPTH_STONE[2]
+        dimming = (1 - (altitude / DEPTH_STONE[2])) / 3
     elseif type == TILE_SNOW then
-        minAlti = DEPTH_SNOW[1]
-        maxAlti = DEPTH_SNOW[2]
+        dimming = (1 - (altitude / DEPTH_SNOW[2])) 
     end
-    brightness = Util.normalize(altitude, minAlti, maxAlti)
-    return Util.dimColor(color, brightness)
+    -- brightness = Util.normalize(altitude, minAlti, maxAlti)
+    -- return Util.dimColor(color, brightness)
+    return Util.dimColor(color, dimming)
 end
 
 function TileColorByNoise.hueFromAltitude(tile)

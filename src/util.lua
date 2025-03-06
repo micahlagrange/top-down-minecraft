@@ -19,9 +19,9 @@ end
 function Util.dimColor(rgb, val)
     if not val then return rgb end
     return {
-        rgb[1] * val,
-        rgb[2] * val,
-        rgb[3] * val
+        rgb[1] - val,
+        rgb[2] - val,
+        rgb[3] - val
     }
 end
 
