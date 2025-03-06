@@ -20,6 +20,7 @@ function World:new()
 end
 
 function World:worldToTileSpace(x, y)
+    if x == nil then print('world fn got nil input') end
     if type(x) == "table" then
         y = x.y
         x = x.x
@@ -31,6 +32,11 @@ function World:worldToTileSpace(x, y)
 end
 
 function World:tileToWorldSpace(x, y)
+    if x == nil then print('world fn got nil input') end
+    if type(x) == "table" then
+        y = x.y
+        x = x.x
+    end
     return {
         x = x * self.tileSize,
         y = y * self.tileSize,
@@ -38,6 +44,7 @@ function World:tileToWorldSpace(x, y)
 end
 
 function World:chunkToTileSpace(x, y)
+    if x == nil then print('world fn got nil input') end
     return {
         x = x * self.chunkSize,
         y = y * self.chunkSize,
@@ -45,6 +52,7 @@ function World:chunkToTileSpace(x, y)
 end
 
 function World:tileToChunkSpace(x, y)
+    if x == nil then print('world fn got nil input') end
     return {
         x = math.floor(x / self.chunkSize),
         y = math.floor(y / self.chunkSize),
@@ -52,6 +60,7 @@ function World:tileToChunkSpace(x, y)
 end
 
 function World:chunkFromPosition(pos)
+    if pos == nil then print('world fn got nil input') end
     local chunkCoordinates = {
         x = math.floor(pos.x / self.tileSize / self.chunkSize),
         y = math.floor(pos.y / self.tileSize / self.chunkSize),

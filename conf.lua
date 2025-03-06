@@ -3,6 +3,9 @@ WINDOW_HEIGHT = 600
 
 CHUNK_DEBUG = false
 CAM_DEBUG = false
+COLLISION_DEBUG = false
+CollisionDrawRects = {}
+CollisionDrawRectsNoCollide = {}
 
 function love.conf(t)
     t.title = "GameNameGoesHere"
