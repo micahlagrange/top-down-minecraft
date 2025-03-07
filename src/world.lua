@@ -103,7 +103,6 @@ function World:GenerateChunk(pos)
             end
 
             -- generate the chunk that the position is in
-            love.math.setRandomSeed(seed:generateChunkSeed({ x = cx, y = cy }))
             for x = startTile.x, startTile.x + self.chunkSize - 1 do
                 if not self.tiles[x] then
                     self.tiles[x] = {}
@@ -113,6 +112,8 @@ function World:GenerateChunk(pos)
                     if not self.tiles[x][y] then
                         self.tiles[x][y] = { altitude = noise:getNoiseValue(x, y)}
                         self.tiles[x][y] = { type = self:getTileTypeFromNoise(self.tiles[x][y].altitude) }
+                        self.tiles[x][y].x = x
+                        self.tiles[x][y].y = y
                     end
                 end
             end

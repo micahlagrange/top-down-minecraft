@@ -1,6 +1,17 @@
 local Util = require('src.util')
+local seed = require('src.seed')
 
 local TileColorByNoise = {}
+
+local function randomizeBrightness(color, tile)
+    love.math.setRandomSeed(seed:generateChunkSeed(tile))
+    local br = seed:randomInt(-1,1)
+    return {
+        color[1] + (br/60),
+        color[2] + (br/60),
+        color[3] + (br/60),
+    }
+end
 
 
 local function getDimmingByColorAndLayer(color, type, altitude)
@@ -48,7 +59,7 @@ function TileColorByNoise.hueFromAltitude(tile)
         color = { .8, .8, 0 }
     end
 
-    return color
+    return randomizeBrightness(color, tile)
 end
 
 return TileColorByNoise

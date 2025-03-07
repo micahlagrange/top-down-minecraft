@@ -64,12 +64,12 @@ function Player:draw()
         local myTile = self:getTile()
         local tc = world:tileToWorldSpace(myTile.x, myTile.y)
         love.graphics.rectangle("fill", tc.x, tc.y, world.tileSize, world.tileSize)
+        if debugPrint then
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.print(debugPrint, self.x, self.y - 20)
+        end
     end
 
-    if debugPrint then
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print(debugPrint, self.x, self.y - 20)
-    end
 
     if COLLISION_DEBUG and CollisionDrawRects then
         for _, rect in ipairs(CollisionDrawRects) do

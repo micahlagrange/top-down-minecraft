@@ -44,3 +44,7 @@ function love.update(dt)
     player:update(dt)
     camera:update(dt, player)
 end
+
+function love.wheelmoved(_,y)
+    camera:zoom(y)
+end
