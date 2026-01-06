@@ -1,6 +1,7 @@
 local Util = require "src.util"
 local Noise = {}
 Noise.__index = Noise
+local worley = require('src.worley')
 
 function Noise:new()
     local self = setmetatable({}, Noise)
@@ -47,6 +48,10 @@ function Noise:cmaherExample(octaves, x, y, lacunarity, persistence, scale, low,
     Util.normalize(noise, low, high)
 
     return noise
+end
+
+function Noise:worley()
+    worley(x, y, z, #chunk)
 end
 
 return Noise

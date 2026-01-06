@@ -20,12 +20,15 @@ function Camera:draw()
     love.graphics.translate(-self.x, -self.y)
 end
 
-function Camera:zoom(int)
-    print(int)
+function Camera:zoom(int, target)
     if int > 0 then
         self.scale = self.scale + .03
+        self.x = target.x - (WINDOW_WIDTH / 2) / self.scale
+        self.y = target.y - (WINDOW_HEIGHT / 2) / self.scale
     elseif int < 0 then
         self.scale = self.scale - .03
+        self.x = target.x - (WINDOW_WIDTH / 2) / self.scale
+        self.y = target.y - (WINDOW_HEIGHT / 2) / self.scale
     end
 end
 

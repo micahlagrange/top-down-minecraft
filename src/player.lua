@@ -1,13 +1,15 @@
 local Collision = require('src.collision')
 local world     = require('src.world')
-local Util      = require('src.util')
 
 local Player    = {}
 Player.__index  = Player
 local debugPrint
 
-local function walkable(tileType)
-    return tileType == TILE_GRASS
+local dryTimer  = 0
+local dryTick   = 500
+
+local function passable(tileType)
+    return tileType == TILE_GRASS or tileType == TILE_WATER
 end
 
 function Player:new(controller)
@@ -34,13 +36,17 @@ function Player:setPos(pos)
 end
 
 function Player:draw()
-    love.graphics.setColor(1, 1, 0, .8)
+    if self:isWet() then
+        love.graphics.setColor(.2, .4, .4)
+    else
+        love.graphics.setColor(.8, .8, 0)
+    end
     love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
 
     if COLLISION_DEBUG then
         for _, tile in ipairs(self:adjacentTiles()) do
             local to = world:tileToWorldSpace(tile)
-            if walkable(world.tiles[tile.x][tile.y].type) then
+            if passable(world.tiles[tile.x][tile.y].type) then
                 love.graphics.setColor(0, 1, 0)
             else
                 love.graphics.setColor(1, 0, 0)
@@ -90,6 +96,17 @@ function Player:update(dt)
     if vector.x ~= 0 or vector.y ~= 0 then
         self:move(vector, dt)
     end
+
+    if self:getTile().type == TILE_WATER then
+        dryTimer = dryTick
+        -- start to dry
+    else
+        if dryTimer > 0 then
+            dryTimer = dryTimer - (dryTick * dt)
+        else
+            self.wet = false
+        end
+    end
 end
 
 function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
@@ -122,7 +139,7 @@ function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
                     height = world.tileSize
                 }
                 if Collision.aabbCollided(playerRect, tileRect)
-                    and not walkable(world.tiles[x][y].type) then
+                    and not passable(world.tiles[x][y].type) then
                     velocity.x = tileRect.x - self.width
                     -- break
                     return velocity
@@ -147,7 +164,7 @@ function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
                     height = world.tileSize
                 }
                 if Collision.aabbCollided(playerRect, tileRect)
-                    and not walkable(world.tiles[x][y].type) then
+                    and not passable(world.tiles[x][y].type) then
                     print('yup left')
                     velocity.x = tileRect.x + world.tileSize
                     -- break
@@ -184,7 +201,7 @@ function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
                     height = world.tileSize
                 }
                 if Collision.aabbCollided(playerRect, tileRect)
-                    and not walkable(world.tiles[x][y].type) then
+                    and not passable(world.tiles[x][y].type) then
                     print('yup down')
                     velocity.y = tileRect.y - world.tileSize
                     -- break
@@ -211,7 +228,7 @@ function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
                     height = world.tileSize
                 }
                 if Collision.aabbCollided(playerRect, tileRect)
-                    and not walkable(world.tiles[x][y].type) then
+                    and not passable(world.tiles[x][y].type) then
                     print('yup up')
                     velocity.y = tileRect.y + world.tileSize
                     -- break
@@ -225,10 +242,11 @@ function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
 end
 
 function Player:getTile()
-    return world:worldToTileSpace(
+    local tile = world:worldToTileSpace(
         self.x + (self.width / 2),
         self.y + (self.height / 2)
     )
+    return world.tiles[tile.x][tile.y]
 end
 
 function Player:adjacentTiles()
@@ -292,7 +310,7 @@ function Player:checkTilesForCollision(x, y, tiles)
         height = self.height,
     }
     for _, tile in ipairs(tiles) do
-        if not walkable(world.tiles[tile.x][tile.y].type) then
+        if not passable(world.tiles[tile.x][tile.y].type) then
             local tileOrigin = world:tileToWorldSpace(tile)
             local tileRect = {
                 x = tileOrigin.x,
@@ -329,7 +347,14 @@ function Player:move(vector, dt)
     end
     self.x = velocity.x
     self.y = velocity.y
+    if self:getTile().type == TILE_WATER then
+        self.wet = true
+    end
     world:emitPlayerMoved(self:pos())
+end
+
+function Player:isWet()
+    return self.wet
 end
 
 return Player

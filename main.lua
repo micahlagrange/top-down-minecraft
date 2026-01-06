@@ -2,8 +2,8 @@ require('src.colors')
 require('src.constants')
 Player                 = require('src.player')
 local Controls         = require('src.controls')
-local Noise = require('src.noise')
-local noise = Noise:new()
+local Noise            = require('src.noise')
+local noise            = Noise:new()
 local tilecolorbynoise = require('src.tilecolorbynoise')
 local controller       = Controls:new()
 local player           = Player:new(controller)
@@ -46,5 +46,5 @@ function love.update(dt)
 end
 
 function love.wheelmoved(_,y)
-    camera:zoom(y)
+    camera:zoom(y, player)
 end
