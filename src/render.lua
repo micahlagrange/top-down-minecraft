@@ -33,7 +33,7 @@ end
 
 local function drawGround(kind, px, py, x, y)
     local c = COLORS[kind]
-    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.06))
+    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.025))
     love.graphics.rectangle('fill', px, py, T, T)
     if kind == 'grass' then
         love.graphics.setColor(shade(c, -0.09))
@@ -54,7 +54,7 @@ end
 -- outcrop reads as one mass instead of a stack of bricks.
 local function drawBlock(world, kind, px, py, x, y)
     local c = COLORS.rock
-    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.04))
+    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.02))
     love.graphics.rectangle('fill', px, py, T, T)
     love.graphics.setColor(shade(c, -0.05))
     for k = 1, 2 do
@@ -258,7 +258,8 @@ function Render.hud(player, pulse)
     end
 end
 
-function Render.hint(text, alpha)
+-- bottom: the gap to leave below the hint (room for the touch controls).
+function Render.hint(text, alpha, bottom)
     if alpha <= 0 then return end
     local font = Render.font(14)
     love.graphics.setFont(font)
@@ -267,7 +268,7 @@ function Render.hint(text, alpha)
     tw = math.min(tw, w - 40)
     local lines = select(2, font:getWrap(text, w - 40))
     local th = #lines * font:getHeight()
-    local x, y = (w - tw) / 2, h - th - 24
+    local x, y = (w - tw) / 2, h - th - (bottom or 24)
     love.graphics.setColor(0, 0, 0, 0.5 * alpha)
     love.graphics.rectangle('fill', x - 10, y - 6, tw + 20, th + 12, 6, 6)
     love.graphics.setColor(1, 1, 1, alpha)

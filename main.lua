@@ -61,7 +61,13 @@ function love.draw()
     Render.draw(world, player, player.target, t)
     Render.hud(player, pulse)
     Input.draw()
-    Render.hint(Input.touchSeen and HINT_TOUCH or HINT_KEYS, math.min(1, math.max(0, 9 - t)))
+    local alpha = math.min(1, math.max(0, 9 - t))
+    if Input.touchSeen then
+        local _, by, r = Input.button()
+        Render.hint(HINT_TOUCH, alpha, love.graphics.getHeight() - by + r * 1.5)
+    else
+        Render.hint(HINT_KEYS, alpha)
+    end
 end
 
 function love.touchpressed(id, x, y)
