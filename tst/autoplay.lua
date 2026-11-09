@@ -15,6 +15,11 @@ function A.input(t, player)
     return { dx = 1, dy = 0, mine = true }
 end
 
+-- Start at dusk, so the shots show the night falling and the player's light.
+function A.dayNight(dn)
+    dn.phase = 0.55
+end
+
 function A.after(t)
     if taken < #SHOTS and t >= SHOTS[taken + 1] then
         taken = taken + 1
