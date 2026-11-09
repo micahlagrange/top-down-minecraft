@@ -18,9 +18,15 @@ World.TYPES = {
     coal  = { solid = true, drop = 'coal', time = 0.8 },
     iron  = { solid = true, drop = 'iron', time = 1.1 },
     gold  = { solid = true, drop = 'gold', time = 1.4 },
+    tree  = { solid = true, drop = 'wood', time = 1.0, floor = 'grass' },
 }
 
 World.MINERALS = { 'coal', 'iron', 'gold' }
+
+-- About one grass tile in fifteen grows a tree; a chopped tree drops an apple
+-- this often.
+World.TREE_CHANCE = 0.065
+World.APPLE_CHANCE = 0.4
 
 -- A small deterministic generator (Park-Miller), so the map never depends on
 -- the platform's math.random.
@@ -86,6 +92,22 @@ function World.new(seed)
 
     -- close enough that the rock is on screen from the start, even on a phone
     self.spawn = { x = self.rock.left - 4, y = cy }
+
+    -- Trees on the grass, from their own generator so the rock and minerals
+    -- above stay as they were. A clearing around the spawn keeps the walk to
+    -- the rock open, and no tree touches the rock.
+    local tr = rng(self.seed + 1)
+    for x = 0, half - 1 do
+        for y = 0, self.height - 1 do
+            local clearing = x >= self.spawn.x - 3 and y >= cy - 2 and y <= cy + 2
+            local nearRock = x >= self.rock.left - 1 and y >= top - 1 and y <= top + h
+            local roll = tr.next()
+            if self.tiles[x][y] == 'grass' and not clearing and not nearRock and roll < World.TREE_CHANCE then
+                self.tiles[x][y] = 'tree'
+            end
+        end
+    end
+    self.drops = rng(self.seed + 2)
     return self
 end
 
@@ -114,12 +136,16 @@ function World:mineTime(x, y)
     return t and World.TYPES[t].time
 end
 
--- Mines a tile: it becomes stone floor. Returns the drop, or nil.
+-- Mines a tile: it becomes its floor (stone, or grass under a tree). Returns
+-- the drop and a bonus drop (an apple from a tree, sometimes), or nil.
 function World:mine(x, y)
     if not self:mineable(x, y) then return nil end
-    local drop = World.TYPES[self.tiles[x][y]].drop
-    self.tiles[x][y] = 'stone'
-    return drop
+    local kind = self.tiles[x][y]
+    local type = World.TYPES[kind]
+    self.tiles[x][y] = type.floor or 'stone'
+    local bonus
+    if kind == 'tree' and self.drops.next() < World.APPLE_CHANCE then bonus = 'apple' end
+    return type.drop, bonus
 end
 
 function World:count(kind)
