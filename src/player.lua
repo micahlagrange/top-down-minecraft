@@ -1,360 +1,101 @@
-local Collision = require('src.collision')
-local world     = require('src.world')
+-- The player: walking with tile collision, facing, and mining. Pure Lua (no
+-- love.*), so the tests can drive it.
 
-local Player    = {}
-Player.__index  = Player
-local debugPrint
+local Player = {}
+Player.__index = Player
 
-local dryTimer  = 0
-local dryTick   = 500
+Player.SIZE = 12
+Player.SPEED = 80
+Player.REACH = 1.6 -- tiles, from the player's centre to a tile's centre
 
-local function passable(tileType)
-    return tileType == TILE_GRASS or tileType == TILE_WATER
-end
-
-function Player:new(controller)
+function Player.new(world)
     local self = setmetatable({}, Player)
-    self.controller = controller
-    self.speed = 100
-    self.sprintMultiplier = 2
-    self.width = 14
-    self.height = 14
-    self.dircheck = {}
+    local T = world.TILE
+    self.world = world
+    self.x = world.spawn.x * T + (T - Player.SIZE) / 2
+    self.y = world.spawn.y * T + (T - Player.SIZE) / 2
+    self.face = { x = 1, y = 0 }
+    self.walking = false
+    self.mining = nil -- { x, y, progress, time }
+    self.inventory = { stone = 0, coal = 0, iron = 0, gold = 0 }
     return self
 end
 
-function Player:pos()
-    return {
-        x = self.x,
-        y = self.y,
-    }
+function Player:center()
+    return self.x + Player.SIZE / 2, self.y + Player.SIZE / 2
 end
 
-function Player:setPos(pos)
-    self.x = pos.x
-    self.y = pos.y
+function Player:tile()
+    local cx, cy = self:center()
+    local T = self.world.TILE
+    return math.floor(cx / T), math.floor(cy / T)
 end
 
-function Player:draw()
-    if self:isWet() then
-        love.graphics.setColor(.2, .4, .4)
+-- True when the player's box at (x, y) overlaps a solid tile.
+function Player:blocked(x, y)
+    local T, s = self.world.TILE, Player.SIZE
+    local x0, x1 = math.floor(x / T), math.floor((x + s - 0.001) / T)
+    local y0, y1 = math.floor(y / T), math.floor((y + s - 0.001) / T)
+    for tx = x0, x1 do
+        for ty = y0, y1 do
+            if self.world:solid(tx, ty) then return true end
+        end
+    end
+    return false
+end
+
+-- Move by a direction vector (any length up to 1) for dt seconds; each axis
+-- is tried on its own, so the player slides along walls.
+function Player:move(dx, dy, dt)
+    local len = math.sqrt(dx * dx + dy * dy)
+    self.walking = len > 0.1
+    if not self.walking then return end
+    if len > 1 then dx, dy = dx / len, dy / len end
+    if math.abs(dx) >= math.abs(dy) then
+        self.face = { x = dx > 0 and 1 or -1, y = 0 }
     else
-        love.graphics.setColor(.8, .8, 0)
+        self.face = { x = 0, y = dy > 0 and 1 or -1 }
     end
-    love.graphics.rectangle("fill", self.x, self.y, self.width, self.height)
-
-    if COLLISION_DEBUG then
-        for _, tile in ipairs(self:adjacentTiles()) do
-            local to = world:tileToWorldSpace(tile)
-            if passable(world.tiles[tile.x][tile.y].type) then
-                love.graphics.setColor(0, 1, 0)
-            else
-                love.graphics.setColor(1, 0, 0)
-            end
-            love.graphics.rectangle("line", to.x, to.y, world.tileSize, world.tileSize)
-        end
-        -- love.graphics.setColor(1, 1, 1)
-        love.graphics.print("tile: " .. self:getTile().x .. "," .. self:getTile().y, self.x, self.y + 20)
-        love.graphics.setColor({ 1, 0, 0, .5 })
-        for _, chk in ipairs(self.dircheck) do
-            local t = world:tileToWorldSpace(chk)
-            love.graphics.print("currxycheck:" .. chk.x .. ',' .. chk.y, self.x, self.y + 40)
-            love.graphics.rectangle("fill", t.x, t.y, world.tileSize, world.tileSize)
-        end
-        -- end
-        -- if self:_collidesRectangle(tile, self.controller:movementVector()) then
-        --     love.graphics.setColor(0, 0, 0)
-        --     love.graphics.print(world.tiles[tile.x][tile.y].type, self.x, self.y)
-        -- end
-        love.graphics.setColor(.1, .1, .1, .1)
-        local myTile = self:getTile()
-        local tc = world:tileToWorldSpace(myTile.x, myTile.y)
-        love.graphics.rectangle("fill", tc.x, tc.y, world.tileSize, world.tileSize)
-        if debugPrint then
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.print(debugPrint, self.x, self.y - 20)
-        end
-    end
-
-
-    if COLLISION_DEBUG and CollisionDrawRects then
-        for _, rect in ipairs(CollisionDrawRects) do
-            love.graphics.setColor(1, 1, 0)
-            love.graphics.rectangle("line", rect.x, rect.y, rect.width, rect.height)
-        end
-        for _, rect in ipairs(CollisionDrawRectsNoCollide) do
-            love.graphics.setColor(0, 1, 0)
-            love.graphics.rectangle("line", rect.x, rect.y, rect.width, rect.height)
-        end
-    end
-    CollisionDrawRects = {}
-    CollisionDrawRectsNoCollide = {}
+    local step = Player.SPEED * dt
+    local nx = self.x + dx * step
+    if not self:blocked(nx, self.y) then self.x = nx end
+    local ny = self.y + dy * step
+    if not self:blocked(self.x, ny) then self.y = ny end
 end
 
-function Player:update(dt)
-    local vector = self.controller:movementVector()
-    if vector.x ~= 0 or vector.y ~= 0 then
-        self:move(vector, dt)
-    end
-
-    if self:getTile().type == TILE_WATER then
-        dryTimer = dryTick
-        -- start to dry
-    else
-        if dryTimer > 0 then
-            dryTimer = dryTimer - (dryTick * dt)
-        else
-            self.wet = false
-        end
-    end
+function Player:inReach(tx, ty)
+    local cx, cy = self:center()
+    local T = self.world.TILE
+    local ddx, ddy = (tx + 0.5) - cx / T, (ty + 0.5) - cy / T
+    return math.sqrt(ddx * ddx + ddy * ddy) <= Player.REACH
 end
 
-function Player:_checkCollisionsTheStupidWay(velocity, moveDir)
-    --so fucking bad, omg so bad
-    local halfSize = world.tileSize / 2
-    local direction = { 0, 1, -1 }
-    -- x player rect
-    local playerRect = {
-        x = velocity.x,
-        y = self.y,
-        width = self.width,
-        height = self.height
-    }
-    if moveDir.x > 0 then
-        --moving right
-        for pos in ipairs(direction) do
-            self.dircheck = {}
-            local x = 1 + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = pos + math.floor((velocity.y + halfSize) / world.tileSize)
-            table.insert(self.dircheck, { x = x, y = y })
-        end
-        for _, pos in ipairs(direction) do
-            local x = 1 + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = pos + math.floor((velocity.y + halfSize) / world.tileSize)
-            if x ~= -1 and y ~= -1 and x < world.tileSize and y < world.tileSize then
-                local tileRect = {
-                    x = x * world.tileSize,
-                    y = y * world.tileSize,
-                    width = world.tileSize,
-                    height = world.tileSize
-                }
-                if Collision.aabbCollided(playerRect, tileRect)
-                    and not passable(world.tiles[x][y].type) then
-                    velocity.x = tileRect.x - self.width
-                    -- break
-                    return velocity
-                end
-            end
-        end
-    elseif moveDir.x < 0 then
-        for pos in ipairs(direction) do
-            self.dircheck = {}
-            local x = math.floor((velocity.x + halfSize) / world.tileSize) - 1
-            local y = pos + math.floor((velocity.y + halfSize) / world.tileSize)
-            table.insert(self.dircheck, { x = x, y = y })
-        end
-        for _, pos in ipairs(direction) do
-            local x = math.floor((velocity.x + halfSize) / world.tileSize) - 1
-            local y = pos + math.floor((velocity.y + halfSize) / world.tileSize)
-            if x ~= -1 and y ~= -1 and x < world.tileSize and y < world.tileSize then
-                local tileRect = {
-                    x = x * world.tileSize,
-                    y = y * world.tileSize,
-                    width = world.tileSize,
-                    height = world.tileSize
-                }
-                if Collision.aabbCollided(playerRect, tileRect)
-                    and not passable(world.tiles[x][y].type) then
-                    print('yup left')
-                    velocity.x = tileRect.x + world.tileSize
-                    -- break
-                    return velocity
-                end
-            end
-        end
-    end
-
-    -- y direction
-    -- y player rect
-    playerRect = {
-        x = self.x,
-        y = velocity.y,
-        width = self.width,
-        height = self.height,
-    }
-
-    if moveDir.y > 0 then
-        for pos in ipairs(direction) do
-            self.dircheck = {}
-            local x = pos + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = 1 + math.floor((velocity.y + halfSize) / world.tileSize)
-            table.insert(self.dircheck, { x = x, y = y })
-        end
-        for pos in ipairs(direction) do
-            local x = pos + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = 1 + math.floor((velocity.y + halfSize) / world.tileSize)
-            if x ~= -1 and y ~= -1 and x < world.tileSize and y < world.tileSize then
-                local tileRect = {
-                    x = x * world.tileSize,
-                    y = y * world.tileSize,
-                    width = world.tileSize,
-                    height = world.tileSize
-                }
-                if Collision.aabbCollided(playerRect, tileRect)
-                    and not passable(world.tiles[x][y].type) then
-                    print('yup down')
-                    velocity.y = tileRect.y - world.tileSize
-                    -- break
-                    return velocity
-                end
-            end
-        end
-    elseif moveDir.y < 0 then
-        for pos in ipairs(direction) do
-            self.dircheck = {}
-            local x = pos + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = math.floor((velocity.y + halfSize) / world.tileSize) - 1
-            table.insert(self.dircheck, { x = x, y = y })
-        end
-        for pos in ipairs(direction) do
-            local x = pos + math.floor((velocity.x + halfSize) / world.tileSize)
-            local y = math.floor((velocity.y + halfSize) / world.tileSize) - 1
-            if not x or not y then print('wtf') end
-            if x ~= -1 and y ~= -1 and x < world.tileSize and y < world.tileSize then
-                local tileRect = {
-                    x = x * world.tileSize,
-                    y = y * world.tileSize,
-                    width = world.tileSize,
-                    height = world.tileSize
-                }
-                if Collision.aabbCollided(playerRect, tileRect)
-                    and not passable(world.tiles[x][y].type) then
-                    print('yup up')
-                    velocity.y = tileRect.y + world.tileSize
-                    -- break
-                    return velocity
-                end
-            end
-        end
-    end
-
-    return velocity
+-- The tile mining aims at: the one in front of the player.
+function Player:facingTile()
+    local tx, ty = self:tile()
+    return tx + self.face.x, ty + self.face.y
 end
 
-function Player:getTile()
-    local tile = world:worldToTileSpace(
-        self.x + (self.width / 2),
-        self.y + (self.height / 2)
-    )
-    return world.tiles[tile.x][tile.y]
-end
-
-function Player:adjacentTiles()
-    local tile = self:getTile()
-    return {
-        { x = tile.x - 1, y = tile.y - 1 }, -- top left
-        { x = tile.x,     y = tile.y - 1 }, -- top
-        { x = tile.x + 1, y = tile.y - 1 }, -- top right
-        { x = tile.x + 1, y = tile.y },     -- right
-        { x = tile.x + 1, y = tile.y + 1 }, -- bottom right
-        { x = tile.x,     y = tile.y + 1 }, -- bottom
-        { x = tile.x - 1, y = tile.y + 1 }, -- bottom left
-        { x = tile.x - 1, y = tile.y },     -- left
-    }
-end
-
-function Player:adjacentTilesInXDirection(direction)
-    local tiles = {}
-    for _, tile in ipairs(self:adjacentTiles()) do
-        if self:tileInMovementDirection(direction, 0, tile) then
-            local wt = world:tileToWorldSpace(tile)
-            local tr = { x = wt.x, y = wt.y, width = world.tileSize, height = world.tileSize }
-            table.insert(tiles, tile)
-        end
+-- Hold to mine (tx, ty) (default: the facing tile). Returns the drop when the
+-- tile breaks, or nil. Letting go, or aiming elsewhere, resets the progress.
+function Player:mine(held, dt, tx, ty)
+    if not held then self.mining = nil; return nil end
+    if not tx then tx, ty = self:facingTile() end
+    if not self.world:mineable(tx, ty) or not self:inReach(tx, ty) then
+        self.mining = nil
+        return nil
     end
-    if COLLISION_DEBUG then CollisionDrawRects = tiles end
-    return tiles
-end
-
-function Player:adjacentTilesInYDirection(direction)
-    local tiles = {}
-    for _, tile in ipairs(self:adjacentTiles()) do
-        if self:tileInMovementDirection(0, direction, tile) then
-            local wt = world:tileToWorldSpace(tile)
-            local tr = { x = wt.x, y = wt.y, width = world.tileSize, height = world.tileSize }
-            table.insert(tiles, tile)
-        end
+    local m = self.mining
+    if not m or m.x ~= tx or m.y ~= ty then
+        m = { x = tx, y = ty, progress = 0, time = self.world:mineTime(tx, ty) }
+        self.mining = m
     end
-    if COLLISION_DEBUG then CollisionDrawRects = tiles end
-    return tiles
-end
-
-function Player:tileInMovementDirection(x, y, tile)
-    if x > 0 and tile.x > self:getTile().x or x < 0 and tile.x < self:getTile().x then
-        debugPrint = "tile xy: " ..
-            tile.x .. "," .. tile.y .. " playertile xy: " .. self:getTile().x .. "," .. self:getTile().y
-        return true
-    end
-    if y > 0 and tile.y > self:getTile().y or y < 0 and tile.y < self:getTile().y then
-        debugPrint = "tile xy: " ..
-            tile.x .. "," .. tile.y .. " playertile xy: " .. self:getTile().x .. "," .. self:getTile().y
-        return true
-    end
-end
-
-function Player:checkTilesForCollision(x, y, tiles)
-    local playerRect = {
-        x = x,
-        y = y,
-        width = self.width,
-        height = self.height,
-    }
-    for _, tile in ipairs(tiles) do
-        if not passable(world.tiles[tile.x][tile.y].type) then
-            local tileOrigin = world:tileToWorldSpace(tile)
-            local tileRect = {
-                x = tileOrigin.x,
-                y = tileOrigin.y,
-                width = world.tileSize,
-                height = world.tileSize,
-            }
-            if Collision.aabbCollided(tileRect, playerRect) then
-                table.insert(CollisionDrawRects, playerRect)
-                return true
-            end
-        end
-    end
-end
-
-function Player:move(vector, dt)
-    local direction = vector
-    local multi = 1
-    if self.controller:sprintButtonHeld() then
-        multi = multi * self.sprintMultiplier
-    end
-    local velocity = {
-        x = self.x + vector.x * self.speed * multi * dt,
-        y = self.y + vector.y * self.speed * multi * dt,
-    }
-    -- checking x and y separately is the easiest way to collide and slide!
-    -- revert x if colliding
-    if self:checkTilesForCollision(velocity.x, self.y, self:adjacentTilesInXDirection(direction.x)) then
-        velocity.x = self.x
-    end
-    -- revert y if colliding
-    if self:checkTilesForCollision(self.x, velocity.y, self:adjacentTilesInYDirection(direction.y)) then
-        velocity.y = self.y
-    end
-    self.x = velocity.x
-    self.y = velocity.y
-    if self:getTile().type == TILE_WATER then
-        self.wet = true
-    end
-    world:emitPlayerMoved(self:pos())
-end
-
-function Player:isWet()
-    return self.wet
+    m.progress = m.progress + dt
+    if m.progress < m.time then return nil end
+    self.mining = nil
+    local drop = self.world:mine(tx, ty)
+    self.inventory[drop] = self.inventory[drop] + 1
+    return drop, tx, ty
 end
 
 return Player

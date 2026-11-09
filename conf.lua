@@ -1,17 +1,12 @@
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
-
-CHUNK_DEBUG = false
-CAM_DEBUG = false
-COLLISION_DEBUG = false
-CollisionDrawRects = {}
-CollisionDrawRectsNoCollide = {}
-
 function love.conf(t)
-    t.title = "GameNameGoesHere"
-    t.version = "11.4" -- It's a lie, we actually use 12 but makelove throws a dumb error!
+    t.identity = 'topsoil'
+    t.title = 'Topsoil'
+    t.version = '11.4'
     t.console = false
-    t.window.width = WINDOW_WIDTH
-    t.window.height = WINDOW_HEIGHT
-    t.window.vsync = 0
+    t.window.width = 800
+    t.window.height = 600
+    t.window.resizable = true
+    t.window.minwidth = 320
+    t.window.minheight = 320
+    t.window.vsync = 1
 end
