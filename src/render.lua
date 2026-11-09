@@ -94,7 +94,10 @@ end
 
 local function paintMap(world)
     if not mapCanvas then
-        mapCanvas = love.graphics.newCanvas(world.width * T, world.height * T)
+        -- love.js can default to a 16-bit canvas, which bands the subtle tile shading
+        local formats = love.graphics.getCanvasFormats()
+        local settings = formats.rgba8 and { format = 'rgba8' } or nil
+        mapCanvas = love.graphics.newCanvas(world.width * T, world.height * T, settings)
         mapCanvas:setFilter('nearest', 'nearest')
     end
     love.graphics.setCanvas(mapCanvas)
