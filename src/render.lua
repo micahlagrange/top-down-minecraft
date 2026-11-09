@@ -240,7 +240,7 @@ end
 -- The night: a dark blue layer over the map with a soft hole of light around
 -- the player, painted into its own screen-sized canvas each frame.
 local NIGHT = { 0.03, 0.04, 0.12 }
-local LIGHT_RINGS = 28
+local LIGHT_RINGS = 64
 local nightCanvas
 
 function Render.night(dayNight, player)
@@ -248,7 +248,9 @@ function Render.night(dayNight, player)
     if alpha <= 0.002 then return end
     local w, h = love.graphics.getDimensions()
     if not nightCanvas or nightCanvas:getWidth() ~= w or nightCanvas:getHeight() ~= h then
-        nightCanvas = love.graphics.newCanvas(w, h)
+        -- rgba8: love.js can default to a 16-bit canvas, which bands the light
+        local settings = love.graphics.getCanvasFormats().rgba8 and { format = 'rgba8' } or nil
+        nightCanvas = love.graphics.newCanvas(w, h, settings)
     end
     local px, py = player:center()
     local sx = (px - math.floor(cam.x * cam.scale) / cam.scale) * cam.scale
@@ -256,9 +258,12 @@ function Render.night(dayNight, player)
     local radius = dayNight.LIGHT_RADIUS * T * cam.scale
 
     love.graphics.setCanvas(nightCanvas)
-    love.graphics.clear(NIGHT[1], NIGHT[2], NIGHT[3], alpha)
-    -- 'replace' writes each ring's alpha as is, so the light cuts through
-    -- the dark instead of adding to it; outer rings first, inner on top.
+    -- The canvas holds premultiplied colour: 'replace' (with the default
+    -- alphamultiply) stores rgb * a, so the clear does the same, and the
+    -- canvas is drawn in premultiplied mode. 'replace' writes each ring's
+    -- alpha as is, so the light cuts through the dark instead of adding to
+    -- it; outer rings first, inner on top.
+    love.graphics.clear(NIGHT[1] * alpha, NIGHT[2] * alpha, NIGHT[3] * alpha, alpha)
     love.graphics.setBlendMode('replace')
     for k = LIGHT_RINGS, 1, -1 do
         local d = k / LIGHT_RINGS
@@ -268,7 +273,9 @@ function Render.night(dayNight, player)
     love.graphics.setBlendMode('alpha')
     love.graphics.setCanvas()
     love.graphics.setColor(1, 1, 1)
+    love.graphics.setBlendMode('alpha', 'premultiplied')
     love.graphics.draw(nightCanvas, 0, 0)
+    love.graphics.setBlendMode('alpha')
 end
 
 -- Top centre: the sun or moon on a small arc, and the day number.
