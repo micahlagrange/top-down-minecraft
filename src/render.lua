@@ -33,7 +33,7 @@ end
 
 local function drawGround(kind, px, py, x, y)
     local c = COLORS[kind]
-    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.025))
+    love.graphics.setColor(c)
     love.graphics.rectangle('fill', px, py, T, T)
     if kind == 'grass' then
         love.graphics.setColor(shade(c, -0.09))
@@ -54,7 +54,7 @@ end
 -- outcrop reads as one mass instead of a stack of bricks.
 local function drawBlock(world, kind, px, py, x, y)
     local c = COLORS.rock
-    love.graphics.setColor(shade(c, (hash(x, y) - 0.5) * 0.02))
+    love.graphics.setColor(c)
     love.graphics.rectangle('fill', px, py, T, T)
     love.graphics.setColor(shade(c, -0.05))
     for k = 1, 2 do
@@ -94,10 +94,7 @@ end
 
 local function paintMap(world)
     if not mapCanvas then
-        -- love.js can default to a 16-bit canvas, which bands the subtle tile shading
-        local formats = love.graphics.getCanvasFormats()
-        local settings = formats.rgba8 and { format = 'rgba8' } or nil
-        mapCanvas = love.graphics.newCanvas(world.width * T, world.height * T, settings)
+        mapCanvas = love.graphics.newCanvas(world.width * T, world.height * T)
         mapCanvas:setFilter('nearest', 'nearest')
     end
     love.graphics.setCanvas(mapCanvas)
