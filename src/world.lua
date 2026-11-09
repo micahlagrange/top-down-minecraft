@@ -1,151 +1,134 @@
-local Noise = require('src.noise')
-local Util  = require('src.util')
-local noise = Noise:new()
-
-local seed = require('src.seed')
+-- The map: a fixed grid of tiles, the same every run. Pure Lua (no love.*),
+-- so the tests can load it outside LÖVE.
 
 local World = {}
 World.__index = World
 
-function World:new()
+World.TILE = 16
+World.WIDTH = 48
+World.HEIGHT = 36
+World.SEED = 20261108
+
+-- Ground you walk on, and solid tiles you mine. `drop` is what mining gives,
+-- `floor` what is left behind, `time` the seconds of mining it takes.
+World.TYPES = {
+    grass = { solid = false },
+    stone = { solid = false },
+    rock  = { solid = true, drop = 'stone', time = 0.6 },
+    coal  = { solid = true, drop = 'coal', time = 0.8 },
+    iron  = { solid = true, drop = 'iron', time = 1.1 },
+    gold  = { solid = true, drop = 'gold', time = 1.4 },
+}
+
+World.MINERALS = { 'coal', 'iron', 'gold' }
+
+-- A small deterministic generator (Park-Miller), so the map never depends on
+-- the platform's math.random.
+local function rng(seed)
+    local state = seed % 2147483647
+    if state <= 0 then state = state + 2147483646 end
+    local r = {}
+    function r.next()
+        state = (state * 16807) % 2147483647
+        return (state - 1) / 2147483646
+    end
+    function r.int(a, b)
+        return a + math.floor(r.next() * (b - a + 1))
+    end
+    return r
+end
+World.rng = rng
+
+local function pickMineral(r)
+    local v = r.next()
+    if v < 0.6 then return 'coal' elseif v < 0.9 then return 'iron' end
+    return 'gold'
+end
+
+function World.new(seed)
     local self = setmetatable({}, World)
-    self.worldSeed = seed.seed
-    self.tileSize = DEFAULT_TILE_SIZE
-    self.chunkSize = DEFAULT_CHUNK_SIZE
-    self.chunksAroundPlayer = DEFAULT_CHUNKS_NEAR_PLAYER
+    self.seed = seed or World.SEED
+    self.width, self.height = World.WIDTH, World.HEIGHT
     self.tiles = {}
-    self.chunks = {}
-    self.lastGeneratedChunk = { x = 0, y = 0 }
+    local r = rng(self.seed)
+    local half = math.floor(self.width / 2)
+
+    for x = 0, self.width - 1 do
+        self.tiles[x] = {}
+        for y = 0, self.height - 1 do
+            self.tiles[x][y] = x < half and 'grass' or 'stone'
+        end
+    end
+
+    -- Sparse minerals lying in the open stone half.
+    for x = half + 1, self.width - 1 do
+        for y = 0, self.height - 1 do
+            if r.next() < 0.035 then self.tiles[x][y] = pickMineral(r) end
+        end
+    end
+
+    -- The rock outcrop in the middle: about 10 wide, 5 to 10 tall, with
+    -- ragged edges. Minerals are richer inside it.
+    local h = r.int(5, 10)
+    local cx, cy = half, math.floor(self.height / 2)
+    local top = cy - math.floor(h / 2)
+    self.rock = { top = top, height = h, left = cx, right = cx }
+    for row = 0, h - 1 do
+        local edge = (row == 0 or row == h - 1) and 2 or 0
+        local w = r.int(9, 11) - edge
+        local left = cx - math.floor(w / 2) + r.int(-1, 1)
+        for x = left, left + w - 1 do
+            self.tiles[x][top + row] = r.next() < 0.12 and pickMineral(r) or 'rock'
+        end
+        self.rock.left = math.min(self.rock.left, left)
+        self.rock.right = math.max(self.rock.right, left + w - 1)
+    end
+
+    self.spawn = { x = 6, y = cy }
     return self
 end
 
-function World:worldToTileSpace(x, y)
-    if x == nil then print('world fn got nil input') end
-    if type(x) == "table" then
-        y = x.y
-        x = x.x
-    end
-    return {
-        x = math.floor(x / self.tileSize),
-        y = math.floor(y / self.tileSize),
-    }
+function World:inside(x, y)
+    return x >= 0 and y >= 0 and x < self.width and y < self.height
 end
 
-function World:tileToWorldSpace(x, y)
-    if x == nil then print('world fn got nil input') end
-    if type(x) == "table" then
-        y = x.y
-        x = x.x
-    end
-    return {
-        x = x * self.tileSize,
-        y = y * self.tileSize,
-    }
+function World:get(x, y)
+    if not self:inside(x, y) then return nil end
+    return self.tiles[x][y]
 end
 
-function World:chunkToTileSpace(x, y)
-    if x == nil then print('world fn got nil input') end
-    return {
-        x = x * self.chunkSize,
-        y = y * self.chunkSize,
-    }
+-- Outside the map counts as solid, so nobody walks off the edge.
+function World:solid(x, y)
+    local t = self:get(x, y)
+    return t == nil or World.TYPES[t].solid
 end
 
-function World:tileToChunkSpace(x, y)
-    if x == nil then print('world fn got nil input') end
-    return {
-        x = math.floor(x / self.chunkSize),
-        y = math.floor(y / self.chunkSize),
-    }
+function World:mineable(x, y)
+    local t = self:get(x, y)
+    return t ~= nil and World.TYPES[t].drop ~= nil
 end
 
-function World:chunkFromPosition(pos)
-    if pos == nil then print('world fn got nil input') end
-    local chunkCoordinates = {
-        x = math.floor(pos.x / self.tileSize / self.chunkSize),
-        y = math.floor(pos.y / self.tileSize / self.chunkSize),
-    }
-    return chunkCoordinates
+function World:mineTime(x, y)
+    local t = self:get(x, y)
+    return t and World.TYPES[t].time
 end
 
-function World:positionFromChunk(chunk)
-    local tile = self:chunkToTileSpace(chunk.x, chunk.y)
-    return self:tileToWorldSpace(tile.x, tile.y)
+-- Mines a tile: it becomes stone floor. Returns the drop, or nil.
+function World:mine(x, y)
+    if not self:mineable(x, y) then return nil end
+    local drop = World.TYPES[self.tiles[x][y]].drop
+    self.tiles[x][y] = 'stone'
+    return drop
 end
 
--- example chunk graph:
--- [0, 0][1, 0][2, 0] (tile 0, 0 to 32, 0)  (world 0, 0   to 512, 0)
--- [0, 1][1, 1][2, 1] (tile 0, 1 to 32, 16) (world 0, 256 to 512, 256)
--- [0, 2][1, 2][2, 2] (tile 0, 2 to 32, 32) (world 0, 512 to 512, 512)
---
--- Chunk 1, 1 is tile 16, 16, because tiles start at position 0, 0
--- Chunk 1, 1 is also world coordinates, assuming 16 pixel
---   tiles, take e.g.: world coordinates { x = 256.333, y = 256.444 }
--- world pos 256.333 / 16 = 16.0208125, with math.foor it's tile 16.
--- tile pos 16.0208125 / 16 is 1.0013, with math.floor is chunk 1
--- so the above example at world coordinates is:
---    tile 16, 16
---    chunk 1, 1
-
-function World:GenerateChunk(pos)
-    if CHUNK_DEBUG then print('player pos:', pos.x, pos.y) end
-    if pos.x == nil or pos.y == nil then return end
-    local playerChunk = self:chunkFromPosition(pos)
-    if CHUNK_DEBUG then print("player in chunk:", playerChunk.x, playerChunk.y) end
-    -- we don't worry about cleaning up old chunks right now. optimize later
-
-    -- N chunks surrounding player
-    for cy = playerChunk.y - self.chunksAroundPlayer, playerChunk.y + self.chunksAroundPlayer do
-        for cx = playerChunk.x - self.chunksAroundPlayer, playerChunk.x + self.chunksAroundPlayer do
-            local startTile = self:chunkToTileSpace(cx, cy)
-            if CHUNK_DEBUG then
-                print("load chunk", cx, cy)
-            end
-
-            -- generate the chunk that the position is in
-            for x = startTile.x, startTile.x + self.chunkSize - 1 do
-                if not self.tiles[x] then
-                    self.tiles[x] = {}
-                    if CHUNK_DEBUG and x < 0 then print("ok...") end
-                end
-                for y = startTile.y, startTile.y + self.chunkSize - 1 do
-                    if not self.tiles[x][y] then
-                        self.tiles[x][y] = { altitude = noise:getNoiseValue(x, y)}
-                        self.tiles[x][y] = { type = self:getTileTypeFromNoise(self.tiles[x][y].altitude) }
-                        self.tiles[x][y].x = x
-                        self.tiles[x][y].y = y
-                    end
-                end
-            end
+function World:count(kind)
+    local n = 0
+    for x = 0, self.width - 1 do
+        for y = 0, self.height - 1 do
+            if self.tiles[x][y] == kind then n = n + 1 end
         end
     end
+    return n
 end
 
-function World:getTileTypeFromNoise(noise)
-    -- assume 0-1
-    if Util.noiseRange(noise, DEPTH_WATER) then
-        return TILE_WATER
-    elseif Util.noiseRange(noise, DEPTH_GRASS) then
-        return TILE_GRASS
-    elseif Util.noiseRange(noise, DEPTH_STONE) then
-        return TILE_STONE
-    elseif Util.noiseRange(noise, DEPTH_SNOW) then
-        return TILE_SNOW
-    else
-        print("tfw", noise)
-        return { 1, 0, 1 }
-    end
-end
-
-function World:emitPlayerMoved(pos)
-    -- generate the chunk that the player is in
-    -- (and eventually the N surrounding chunks)
-    local chunk = self:chunkFromPosition(pos)
-    if self.lastGeneratedChunk.x ~= chunk.x or self.lastGeneratedChunk.y ~= chunk.y then
-        -- only generate the chunk if it's a new chunk the player entered
-        self:GenerateChunk(pos)
-    end
-end
-
-local instance = World:new()
-return instance
+return World
