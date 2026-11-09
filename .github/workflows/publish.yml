@@ -1,0 +1,25 @@
+# Vended by game-jam/scripts/jamci.mjs; the build lives in micahlagrange/jam-ci.
+# Edit the inputs, not the steps. Every push builds and tests; only the default
+# branch publishes to itch, including the push of an approved epic's merge.
+name: publish
+
+on:
+  push:
+  workflow_dispatch:
+
+# A newer push cancels an older run on a branch, never on the default branch: a
+# second epic merging must not cancel the first epic's publish (its epic-finish
+# would then report ship-failed).
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+jobs:
+  publish:
+    uses: micahlagrange/jam-ci/.github/workflows/publish-love.yml@main
+    with:
+      itch_game: 'topsoil'
+      game_name: 'topsoil'
+      test: 'pip install lupa && python3 tst/run.py'
+      post_build: 'python3 tools/patch_lovejs.py makelove-build/lovejs/topsoil-lovejs.zip'
+    secrets: inherit
