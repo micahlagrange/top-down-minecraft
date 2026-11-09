@@ -84,7 +84,8 @@ function World.new(seed)
         self.rock.right = math.max(self.rock.right, left + w - 1)
     end
 
-    self.spawn = { x = 6, y = cy }
+    -- close enough that the rock is on screen from the start, even on a phone
+    self.spawn = { x = self.rock.left - 4, y = cy }
     return self
 end
 
