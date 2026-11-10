@@ -34,6 +34,12 @@ function Sfx.load()
         local hz = f < 0.35 and 880 or 1318
         return math.sin(t * 2 * math.pi * hz) * 0.25 * (1 - f) ^ 1.5
     end)
+    -- two soft bites of an apple
+    sources.munch = make(0.28, function(t, f, r)
+        last = last * 0.7 + (r.next() * 2 - 1) * 0.3
+        local bite = (f < 0.45) and (1 - f / 0.45) or (f > 0.55 and (1 - (f - 0.55) / 0.45) or 0)
+        return last * bite ^ 2 * 0.9
+    end)
 end
 
 function Sfx.play(name, pitch)

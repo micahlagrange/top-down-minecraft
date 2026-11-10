@@ -13,6 +13,9 @@ local COLORS = {
     coal  = { 0.12, 0.12, 0.14 },
     iron  = { 0.86, 0.62, 0.45 },
     gold  = { 1.00, 0.83, 0.22 },
+    tree  = { 0.18, 0.45, 0.20 },
+    wood  = { 0.62, 0.42, 0.24 },
+    apple = { 0.86, 0.16, 0.14 },
 }
 Render.COLORS = COLORS
 
@@ -92,6 +95,29 @@ local function drawBlock(world, kind, px, py, x, y)
     end
 end
 
+-- A tree: grass underneath, a trunk, a round canopy that fills the tile, and
+-- a few apples on some of them.
+local function drawTree(px, py, x, y)
+    drawGround('grass', px, py, x, y)
+    love.graphics.setColor(0, 0, 0, 0.25)
+    love.graphics.ellipse('fill', px + 8, py + 14, 6, 2)
+    love.graphics.setColor(COLORS.wood)
+    love.graphics.rectangle('fill', px + 6, py + 9, 4, 6)
+    local c = COLORS.tree
+    love.graphics.setColor(shade(c, -0.06))
+    love.graphics.circle('fill', px + 8, py + 7, 7)
+    love.graphics.setColor(c)
+    love.graphics.circle('fill', px + 7, py + 6, 6)
+    love.graphics.setColor(shade(c, 0.12))
+    love.graphics.circle('fill', px + 5, py + 4, 2.5)
+    if hash(x, y, 21) < 0.6 then
+        love.graphics.setColor(COLORS.apple)
+        for k = 1, 2 do
+            love.graphics.rectangle('fill', px + 3 + math.floor(hash(x, y, k + 30) * 9), py + 3 + math.floor(hash(x, y, k + 40) * 7), 2, 2)
+        end
+    end
+end
+
 local function paintMap(world)
     if not mapCanvas then
         mapCanvas = love.graphics.newCanvas(world.width * T, world.height * T)
@@ -102,12 +128,15 @@ local function paintMap(world)
     for x = 0, world.width - 1 do
         for y = 0, world.height - 1 do
             local kind = world.tiles[x][y]
-            if World.TYPES[kind].solid then
+            if kind == 'tree' then
+                drawTree(x * T, y * T, x, y)
+            elseif World.TYPES[kind].solid then
                 drawBlock(world, kind, x * T, y * T, x, y)
             else
                 drawGround(kind, x * T, y * T, x, y)
                 -- a soft shadow under a block that sits above open ground
-                if y > 0 and World.TYPES[world.tiles[x][y - 1]].solid then
+                local above = y > 0 and world.tiles[x][y - 1]
+                if above and above ~= 'tree' and World.TYPES[above].solid then
                     love.graphics.setColor(0, 0, 0, 0.22)
                     love.graphics.rectangle('fill', x * T, y * T, T, 4)
                 end
@@ -315,9 +344,36 @@ function Render.clock(dayNight)
     love.graphics.print(night and 'night' or 'day', x + 62, y + 26)
 end
 
-local HUD_ORDER = { 'stone', 'coal', 'iron', 'gold' }
+local HUD_ORDER = { 'stone', 'coal', 'iron', 'gold', 'wood', 'apple' }
 
-function Render.hud(player, pulse)
+-- The hunger bar: top right, green when full, red when low; it blinks and
+-- reads SLOW once hunger is empty.
+local function hungerBar(player, pulse, t)
+    local font = Render.font(14)
+    love.graphics.setFont(font)
+    local w = love.graphics.getWidth()
+    local bw, bh, pad = math.min(160, w * 0.3), 14, 10
+    local x, y = w - bw - pad, pad + 18
+    local f = player.hunger / player.HUNGER_MAX
+    love.graphics.setColor(0, 0, 0, 0.45)
+    love.graphics.rectangle('fill', x - 6, pad - 2, bw + 12, bh + 28, 6, 6)
+    love.graphics.setColor(1, 1, 1)
+    local label = player:starving() and 'HUNGER  SLOW' or 'HUNGER'
+    love.graphics.print(label, x, pad)
+    love.graphics.setColor(0.15, 0.15, 0.17)
+    love.graphics.rectangle('fill', x, y, bw, bh, 3, 3)
+    local r, g = math.min(1, 2 * (1 - f)), math.min(1, 2 * f)
+    love.graphics.setColor(r * 0.9, g * 0.75, 0.15)
+    love.graphics.rectangle('fill', x, y, bw * f, bh, 3, 3)
+    local glow = (pulse.hunger or 0)
+    if player:starving() then glow = 0.5 + 0.5 * math.sin(t * 8) end
+    love.graphics.setColor(1, 1, 1, 0.3 + 0.5 * glow)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle('line', x, y, bw, bh, 3, 3)
+end
+
+function Render.hud(player, pulse, t)
+    hungerBar(player, pulse, t or 0)
     local font = Render.font(16)
     love.graphics.setFont(font)
     local pad, row = 10, 24

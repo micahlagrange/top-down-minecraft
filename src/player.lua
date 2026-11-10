@@ -8,6 +8,14 @@ Player.SIZE = 12
 Player.SPEED = 80
 Player.REACH = 1.6 -- tiles, from the player's centre to a tile's centre
 
+-- Hunger runs from HUNGER_MAX (full) down to 0 at HUNGER_RATE a second, so a
+-- full bar lasts about three minutes. An apple gives back APPLE_FOOD. At 0 the
+-- player walks and mines at STARVING_PACE of the normal speed.
+Player.HUNGER_MAX = 100
+Player.HUNGER_RATE = 100 / 180
+Player.APPLE_FOOD = 35
+Player.STARVING_PACE = 0.5
+
 function Player.new(world)
     local self = setmetatable({}, Player)
     local T = world.TILE
@@ -17,7 +25,8 @@ function Player.new(world)
     self.face = { x = 1, y = 0 }
     self.walking = false
     self.mining = nil -- { x, y, progress, time }
-    self.inventory = { stone = 0, coal = 0, iron = 0, gold = 0 }
+    self.inventory = { stone = 0, coal = 0, iron = 0, gold = 0, wood = 0, apple = 0 }
+    self.hunger = Player.HUNGER_MAX
     return self
 end
 
@@ -56,7 +65,7 @@ function Player:move(dx, dy, dt)
     else
         self.face = { x = 0, y = dy > 0 and 1 or -1 }
     end
-    local step = Player.SPEED * dt
+    local step = Player.SPEED * self:pace() * dt
     local nx = self.x + dx * step
     if not self:blocked(nx, self.y) then self.x = nx end
     local ny = self.y + dy * step
@@ -90,12 +99,36 @@ function Player:mine(held, dt, tx, ty)
         m = { x = tx, y = ty, progress = 0, time = self.world:mineTime(tx, ty) }
         self.mining = m
     end
-    m.progress = m.progress + dt
+    m.progress = m.progress + dt * self:pace()
     if m.progress < m.time then return nil end
     self.mining = nil
-    local drop = self.world:mine(tx, ty)
+    local drop, bonus = self.world:mine(tx, ty)
     self.inventory[drop] = self.inventory[drop] + 1
-    return drop, tx, ty
+    if bonus then self.inventory[bonus] = self.inventory[bonus] + 1 end
+    return drop, tx, ty, bonus
+end
+
+function Player:starving()
+    return self.hunger <= 0
+end
+
+-- 1 normally, STARVING_PACE once hunger is empty.
+function Player:pace()
+    return self:starving() and Player.STARVING_PACE or 1
+end
+
+-- Hunger drains with time.
+function Player:update(dt)
+    self.hunger = math.max(0, self.hunger - Player.HUNGER_RATE * dt)
+end
+
+-- Eats an apple when there is one and the bar is not full. Returns true when
+-- it ate.
+function Player:eat()
+    if self.inventory.apple < 1 or self.hunger >= Player.HUNGER_MAX then return false end
+    self.inventory.apple = self.inventory.apple - 1
+    self.hunger = math.min(Player.HUNGER_MAX, self.hunger + Player.APPLE_FOOD)
+    return true
 end
 
 return Player
