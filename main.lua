@@ -3,8 +3,9 @@ local Player = require('src.player')
 local Input  = require('src.input')
 local Render = require('src.render')
 local Sfx    = require('src.sfx')
+local DayNight = require('src.daynight')
 
-local world, player
+local world, player, dayNight
 local t = 0
 local tickTimer = 0
 local pulse = {}
@@ -17,15 +18,18 @@ function love.load()
     love.graphics.setDefaultFilter('nearest', 'nearest')
     world = World.new()
     player = Player.new(world)
+    dayNight = DayNight.new()
     Sfx.load()
     Render.updateCamera(world, player)
     if os.getenv('TOPSOIL_AUTOPLAY') then autoplay = require('tst.autoplay') end
+    if autoplay and autoplay.dayNight then autoplay.dayNight(dayNight) end
 end
 
 function love.update(dt)
     dt = math.min(dt, 1 / 30)
     if autoplay then dt = 1 / 60 end
     t = t + dt
+    dayNight:update(dt)
     local intent = autoplay and autoplay.input(t, player, world) or Input.read(Render.screenToTile)
 
     player:update(dt)
@@ -76,7 +80,9 @@ end
 
 function love.draw()
     Render.draw(world, player, player.target, t)
+    Render.night(dayNight, player)
     Render.hud(player, pulse, t)
+    Render.clock(dayNight)
     local tg = player.target
     local chop = tg and world:get(tg.x, tg.y) == 'tree'
     Input.draw(chop and 'CHOP' or 'MINE', player.inventory.apple > 0)

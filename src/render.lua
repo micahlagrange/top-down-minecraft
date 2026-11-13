@@ -266,6 +266,84 @@ function Render.draw(world, player, target, t)
     love.graphics.pop()
 end
 
+-- The night: a dark blue layer over the map with a soft hole of light around
+-- the player, painted into its own screen-sized canvas each frame.
+local NIGHT = { 0.03, 0.04, 0.12 }
+local LIGHT_RINGS = 64
+local nightCanvas
+
+function Render.night(dayNight, player)
+    local alpha = dayNight:overlayAlpha()
+    if alpha <= 0.002 then return end
+    local w, h = love.graphics.getDimensions()
+    if not nightCanvas or nightCanvas:getWidth() ~= w or nightCanvas:getHeight() ~= h then
+        -- rgba8: love.js can default to a 16-bit canvas, which bands the light
+        local settings = love.graphics.getCanvasFormats().rgba8 and { format = 'rgba8' } or nil
+        nightCanvas = love.graphics.newCanvas(w, h, settings)
+    end
+    local px, py = player:center()
+    local sx = (px - math.floor(cam.x * cam.scale) / cam.scale) * cam.scale
+    local sy = (py - math.floor(cam.y * cam.scale) / cam.scale) * cam.scale
+    local radius = dayNight.LIGHT_RADIUS * T * cam.scale
+
+    love.graphics.setCanvas(nightCanvas)
+    -- The canvas holds premultiplied colour: 'replace' (with the default
+    -- alphamultiply) stores rgb * a, so the clear does the same, and the
+    -- canvas is drawn in premultiplied mode. 'replace' writes each ring's
+    -- alpha as is, so the light cuts through the dark instead of adding to
+    -- it; outer rings first, inner on top.
+    love.graphics.clear(NIGHT[1] * alpha, NIGHT[2] * alpha, NIGHT[3] * alpha, alpha)
+    love.graphics.setBlendMode('replace')
+    for k = LIGHT_RINGS, 1, -1 do
+        local d = k / LIGHT_RINGS
+        love.graphics.setColor(NIGHT[1], NIGHT[2], NIGHT[3], dayNight.lightAlpha(d - 0.5 / LIGHT_RINGS, alpha))
+        love.graphics.circle('fill', sx, sy, radius * d, 64)
+    end
+    love.graphics.setBlendMode('alpha')
+    love.graphics.setCanvas()
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.setBlendMode('alpha', 'premultiplied')
+    love.graphics.draw(nightCanvas, 0, 0)
+    love.graphics.setBlendMode('alpha')
+end
+
+-- Top centre: the sun or moon on a small arc, and the day number.
+function Render.clock(dayNight)
+    local w = love.graphics.getWidth()
+    local font = Render.font(16)
+    love.graphics.setFont(font)
+    local pw, ph = 132, 50
+    local x, y = math.floor((w - pw) / 2), 10
+    love.graphics.setColor(0, 0, 0, 0.45)
+    love.graphics.rectangle('fill', x, y, pw, ph, 6, 6)
+
+    local body, f = dayNight:sky()
+    local night = body == 'moon'
+    local ax, ay, ar = x + 30, y + ph - 10, 20
+    love.graphics.setColor(1, 1, 1, 0.2)
+    love.graphics.setLineWidth(1)
+    love.graphics.arc('line', 'open', ax, ay, ar, math.pi, math.pi * 2, 16)
+    local a = math.pi + f * math.pi
+    local bx, by = ax + math.cos(a) * ar, ay + math.sin(a) * ar
+    if night then
+        love.graphics.setColor(0.9, 0.92, 1)
+        love.graphics.circle('fill', bx, by, 6, 20)
+        love.graphics.setColor(0, 0, 0, 0.75)
+        love.graphics.circle('fill', bx + 3, by - 2, 5, 20)
+    else
+        love.graphics.setColor(1, 0.85, 0.25)
+        for k = 0, 7 do
+            local r = k * math.pi / 4
+            love.graphics.line(bx + math.cos(r) * 7, by + math.sin(r) * 7, bx + math.cos(r) * 9, by + math.sin(r) * 9)
+        end
+        love.graphics.circle('fill', bx, by, 5, 20)
+    end
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print('DAY ' .. dayNight.day, x + 62, y + 8)
+    love.graphics.setColor(1, 1, 1, 0.6)
+    love.graphics.print(night and 'night' or 'day', x + 62, y + 26)
+end
+
 local HUD_ORDER = { 'stone', 'coal', 'iron', 'gold', 'wood', 'apple' }
 
 -- The hunger bar: top right, green when full, red when low; it blinks and
